@@ -8,9 +8,10 @@ from celery.schedules import schedule, crontab
 
 class MongoScheduleEntry(ScheduleEntry):
 
-    def __init__(self, _id=None, **kwargs):
+    def __init__(self, _id=None, enabled=True, **kwargs):
         super().__init__(**kwargs)
         self._id = _id or ObjectId()
+        self.enabled = enabled
 
 
 class MongoScheduler(Scheduler):
