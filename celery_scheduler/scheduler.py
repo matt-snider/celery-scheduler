@@ -1,7 +1,9 @@
-from bson import ObjectId
+from datetime import timedelta
 
 import pymongo
+from bson import ObjectId
 from celery.beat import Scheduler, ScheduleEntry
+from celery.schedules import schedule, crontab
 
 
 class MongoScheduleEntry(ScheduleEntry):
@@ -25,22 +27,31 @@ class MongoScheduler(Scheduler):
         self.sync()
 
     def sync(self):
-        new_schedule = {doc['name']: doc
+        new_schedule = {doc['name']: self.schedule_from_doc(doc)
                         for doc in self.scheduler_collection.find()
-                        if doc['enabled']}
-        for name, entry in self.schedule.items():
-            if name in new_schedule:
-                self.scheduler_collection.update(
-                    {'_id': entry._id},
-                    {'last_run_at': entry.last_run_at,
-                     'total_run_count': entry.total_run_count},
-                )
-            else:
-                doc = vars(entry)
-                doc.pop('app')
-                self.scheduler_collection.insert_one(doc)
+                        if doc.get('enabled', True)}
 
+        # Save state of the current entries
+        for name, entry in self.schedule.items():
+            self.scheduler_collection.update(
+                {'_id': entry._id},
+                {'$set': {
+                    'last_run_at': entry.last_run_at,
+                    'total_run_count': entry.total_run_count
+                    }},
+            )
         self.merge_inplace(new_schedule)
+
+    def schedule_from_doc(self, doc):
+        if 'crontab' in doc:
+            doc['schedule'] = crontab(**doc.pop('crontab'))
+        elif 'interval' in doc:
+            interval = doc.pop('interval')
+            run_every = timedelta(**{interval['period']: interval['every']})
+            doc['schedule'] = schedule(run_every)
+        else:
+            raise Exception('Bad schedule')
+        return doc
 
     def get_schedule(self):
         return self.schedule
