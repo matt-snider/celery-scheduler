@@ -1,5 +1,6 @@
 from bson import ObjectId
 
+import pymongo
 from celery.beat import Scheduler, ScheduleEntry
 
 
@@ -16,8 +17,12 @@ class MongoScheduler(Scheduler):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # TODO: database setup
-        self.scheduler_collection = None
+        db_settings = self.app.conf.CELERYBEAT_MONGODB_BACKEND_SETTINGS
+        db, col = db_settings['database'], db_settings['schedule_collection']
+
+        self.client = pymongo.MongoClient(self.app.conf.CELERYBEAT_BACKEND)
+        self.scheduler_collection = self.client[db][col]
+        self.sync()
 
     def sync(self):
         new_schedule = {doc['name']: doc
