@@ -25,10 +25,12 @@ class MongoScheduler(Scheduler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.client = pymongo.MongoClient(self.app.conf.CELERYBEAT_BACKEND)
-        self.mongo_settings = self.app.conf.CELERYBEAT_MONGODB_BACKEND_SETTINGS
+        self.mongo_settings = self.app.conf.get(
+            'CELERYBEAT_MONGODB_BACKEND_SETTINGS', {}
+        )
 
-        db_name = self.mongo_settings['database']
-        collection = self.mongo_settings['schedule_collection']
+        db_name = self.mongo_settings.get('database', 'celery')
+        collection = self.mongo_settings.get('schedule_collection', 'periodic_tasks')
         self.scheduler_collection = self.client[db_name][collection]
         self.sync()
 
