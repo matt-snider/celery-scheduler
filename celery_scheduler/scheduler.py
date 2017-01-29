@@ -4,6 +4,10 @@ import pymongo
 from bson import ObjectId
 from celery.beat import Scheduler, ScheduleEntry
 from celery.schedules import schedule, crontab
+from celery.utils.log import get_logger
+
+
+logger = get_logger('scheduler')
 
 
 class MongoScheduleEntry(ScheduleEntry):
@@ -41,9 +45,17 @@ class MongoScheduler(Scheduler):
                     'total_run_count': entry.total_run_count
                     }},
             )
+
+        # Replace schedule with new schedule
+        new_schedule = {doc['name']: self.schedule_from_document(doc)
+                        for doc in self.scheduler_collection.find()
+                        if doc.get('enabled', True)}
         self.merge_inplace(new_schedule)
 
-    def schedule_from_doc(self, doc):
+        # Trigger recreation of the heap
+        self._heap = None
+
+    def schedule_from_document(self, doc):
         if 'crontab' in doc:
             doc['schedule'] = crontab(**doc.pop('crontab'))
         elif 'interval' in doc:
