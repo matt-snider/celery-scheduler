@@ -24,18 +24,15 @@ class MongoScheduler(Scheduler):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        db_settings = self.app.conf.CELERYBEAT_MONGODB_BACKEND_SETTINGS
-        db, col = db_settings['database'], db_settings['schedule_collection']
-
         self.client = pymongo.MongoClient(self.app.conf.CELERYBEAT_BACKEND)
-        self.scheduler_collection = self.client[db][col]
+        self.mongo_settings = self.app.conf.CELERYBEAT_MONGODB_BACKEND_SETTINGS
+
+        db_name = self.mongo_settings['database']
+        collection = self.mongo_settings['schedule_collection']
+        self.scheduler_collection = self.client[db_name][collection]
         self.sync()
 
     def sync(self):
-        new_schedule = {doc['name']: self.schedule_from_doc(doc)
-                        for doc in self.scheduler_collection.find()
-                        if doc.get('enabled', True)}
-
         # Save state of the current entries
         for name, entry in self.schedule.items():
             self.scheduler_collection.update(
@@ -66,13 +63,13 @@ class MongoScheduler(Scheduler):
             raise Exception('Bad schedule')
         return doc
 
-    def get_schedule(self):
-        return self.schedule
-
-    def set_schedule(self, schedule):
-        pass
-
     def close(self):
         self.sync()
         # Close connections
+
+    @property
+    def info(self):
+        return ('    . db -> MongoDB(database={database}, '
+                'collection={schedule_collection})'
+                    .format(**self.mongo_settings))
 
